@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Provenance Guard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Courier New', Courier, monospace;
+  background: #fff;
+  color: #000;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+header { border-bottom: 2px solid #000; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+header h1 { font-size: 1.25rem; letter-spacing: 0.04em; }
+header p  { font-size: 0.78rem; color: #555; margin-top: 0.2rem; }
+
+/* Nav */
+.nav { display: flex; margin-bottom: 1.5rem; border-bottom: 1px solid #000; }
+.nav button {
+  background: none; border: none;
+  border-bottom: 3px solid transparent;
+  padding: 0.45rem 1.1rem;
+  font-family: inherit; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; margin-bottom: -1px; color: #888;
+}
+.nav button.active { border-bottom-color: #000; color: #000; font-weight: bold; }
+.nav button:hover:not(.active) { color: #000; }
+
+/* Section */
+.section { border: 1px solid #000; padding: 1.25rem; margin-bottom: 1.25rem; }
+.section h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+
+/* Forms */
+.field { margin-bottom: 0.85rem; }
+label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; color: #555; }
+input, textarea, select {
+  width: 100%; border: 1px solid #000; padding: 0.5rem 0.6rem;
+  font-family: inherit; font-size: 0.88rem; background: #fff; color: #000; outline: none;
+}
+input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 2px #000; }
+textarea { min-height: 130px; resize: vertical; }
+select { cursor: pointer; }
+
+button.primary {
+  background: #000; color: #fff; border: none;
+  padding: 0.55rem 1.4rem; font-family: inherit; font-size: 0.85rem;
+  cursor: pointer; margin-top: 0.75rem; letter-spacing: 0.04em;
+}
+button.primary:hover { background: #222; }
+button.primary:disabled { background: #aaa; cursor: not-allowed; }
+button.secondary {
+  background: #fff; color: #000; border: 1px solid #000;
+  padding: 0.4rem 1rem; font-family: inherit; font-size: 0.8rem; cursor: pointer;
+}
+button.secondary:hover { background: #f0f0f0; }
+button.ghost {
+  background: none; border: none; font-family: inherit; font-size: 0.75rem;
+  cursor: pointer; color: #000; text-decoration: underline; padding: 0;
+}
+button.ghost:hover { text-decoration: none; }
+
+/* Alerts */
+.alert { font-size: 0.82rem; margin-top: 0.6rem; padding: 0.5rem 0.7rem; }
+.alert-error   { border-left: 3px solid #c00; color: #c00; }
+.alert-success { border-left: 3px solid #060; color: #060; }
+
+/* Result card */
+.result-card { border: 1px solid #000; padding: 1.25rem; margin-top: 1rem; display: none; }
+.result-card.visible { display: block; }
+
+.badge {
+  display: inline-block; font-size: 0.7rem; font-weight: bold;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0.2rem 0.6rem; margin-bottom: 0.8rem;
+}
+.badge-ai       { background: #000; color: #fff; }
+.badge-human    { border: 1px solid #000; }
+.badge-uncertain { background: #888; color: #fff; }
+.badge-verified { background: #fff; border: 2px solid #000; }
+.badge-verified::before { content: "✓ "; }
+
+/* Score bars */
+.bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+.bar-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: #666; min-width: 9rem; }
+.bar-track { flex: 1; height: 5px; background: #e8e8e8; }
+.bar-fill  { height: 100%; background: #000; transition: width 0.4s ease; }
+.bar-value { font-size: 0.8rem; font-weight: bold; min-width: 3.2rem; text-align: right; }
+
+.ensemble-tag {
+  display: inline-block; font-size: 0.65rem; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 0.1rem 0.4rem; border: 1px solid #ccc;
+  color: #666; margin-bottom: 0.8rem; margin-left: 0.4rem;
+}
+
+.label-text {
+  font-size: 0.83rem; line-height: 1.6;
+  border-top: 1px solid #ddd; padding-top: 0.8rem; margin-top: 0.8rem; color: #222;
+}
+
+.content-id-row { font-size: 0.75rem; color: #555; margin-bottom: 0.7rem; }
+.content-id-val {
+  font-family: monospace; background: #f0f0f0; padding: 0.1rem 0.4rem;
+  cursor: pointer; border: 1px solid #ddd; font-size: 0.75rem;
+}
+.content-id-val:hover { background: #e0e0e0; }
+
+.result-actions { display: flex; gap: 1.2rem; margin-top: 0.9rem; flex-wrap: wrap; }
+
+/* Certificate panel */
+.cert-panel { margin-top: 1rem; padding: 1rem; border: 1px solid #000; display: none; }
+.cert-panel.visible { display: block; }
+.cert-badge-issued {
+  font-size: 0.8rem; font-weight: bold; padding: 0.5rem 0.8rem;
+  border: 2px solid #000; display: inline-block; margin-top: 0.5rem;
+}
+.cert-badge-issued::before { content: "✓ "; }
+
+/* Metadata fields */
+.metadata-fields { display: none; }
+.metadata-fields.visible { display: block; }
+.meta-tags-hint { font-size: 0.72rem; color: #888; margin-top: 0.2rem; }
+
+/* Audit log */
+.log-wrap { overflow-x: auto; }
+.log-table { width: 100%; min-width: 960px; border-collapse: collapse; font-size: 0.78rem; }
+.log-table th {
+  text-align: left; padding: 0.35rem 0.5rem;
+  border-bottom: 2px solid #000; font-size: 0.65rem;
+  text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+}
+.log-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+.log-table tr:hover td { background: #fafafa; }
+.log-count { font-size: 0.75rem; color: #888; margin-top: 0.6rem; }
+
+.tag {
+  display: inline-block; font-size: 0.65rem; font-weight: bold;
+  text-transform: uppercase; padding: 0.1rem 0.35rem; letter-spacing: 0.04em;
+}
+.tag-ai       { background: #000; color: #fff; }
+.tag-human    { border: 1px solid #000; }
+.tag-uncertain { background: #888; color: #fff; }
+.tag-review   { background: #c60; color: #fff; }
+.tag-verified { border: 2px solid #000; font-weight: bold; }
+
+/* Analytics */
+.metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.metric-box { border: 1px solid #000; padding: 0.9rem; }
+.metric-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: #666; margin-bottom: 0.3rem; }
+.metric-value { font-size: 1.6rem; font-weight: bold; line-height: 1; }
+.metric-sub   { font-size: 0.72rem; color: #888; margin-top: 0.2rem; }
+
+.dist-bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+.dist-label   { font-size: 0.75rem; min-width: 7rem; }
+.dist-track   { flex: 1; height: 14px; background: #eee; position: relative; }
+.dist-fill    { height: 100%; background: #000; }
+.dist-value   { font-size: 0.75rem; min-width: 3.5rem; text-align: right; }
+
+/* Tabs */
+.tab { display: none; }
+.tab.active { display: block; }
+
+.empty-state { font-size: 0.85rem; color: #888; padding: 0.5rem 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Provenance Guard</h1>
+  <p>AI content attribution for creative platforms</p>
+</header>
+
+<nav class="nav">
+  <button class="active" onclick="switchTab('submit', this)">Submit</button>
+  <button onclick="switchTab('appeal', this)">Appeal</button>
+  <button onclick="switchTab('certify', this)">Certificate</button>
+  <button onclick="switchTab('analytics', this)">Analytics</button>
+  <button onclick="switchTab('log', this)">Audit Log</button>
+</nav>
+
+<!-- ── Submit ─────────────────────────────────────────────────────────────── -->
+<div id="tab-submit" class="tab active">
+  <div class="section">
+    <h2>Analyze Content</h2>
+
+    <div class="field">
+      <label for="creator-id">Creator ID</label>
+      <input type="text" id="creator-id" value="user-demo" placeholder="e.g. user-123">
+    </div>
+
+    <div class="field">
+      <label for="content-type">Content Type</label>
+      <select id="content-type" onchange="onContentTypeChange()">
+        <option value="text">Text (poem, blog post, story)</option>
+        <option value="metadata">Structured Metadata (title + tags + genre)</option>
+      </select>
+    </div>
+
+    <!-- Text fields -->
+    <div id="text-fields">
+      <div class="field">
+        <label for="text-input">Content</label>
+        <textarea id="text-input" placeholder="Paste a poem, blog post, or story excerpt…"></textarea>
+      </div>
+    </div>
+
+    <!-- Metadata fields -->
+    <div id="metadata-fields" class="metadata-fields">
+      <div class="field">
+        <label for="meta-title">Title</label>
+        <input type="text" id="meta-title" placeholder="e.g. Whispers at Dusk">
+      </div>
+      <div class="field">
+        <label for="meta-description">Description</label>
+        <textarea id="meta-description" placeholder="Brief description of the work…" style="min-height:80px"></textarea>
+      </div>
+      <div class="field">
+        <label for="meta-tags">Tags</label>
+        <input type="text" id="meta-tags" placeholder="e.g. poetry, nature, loss, memoir">
+        <div class="meta-tags-hint">Comma-separated</div>
+      </div>
+      <div class="field">
+        <label for="meta-genre">Genre</label>
+        <input type="text" id="meta-genre" placeholder="e.g. lyric poetry">
+      </div>
+    </div>
+
+    <button class="primary" id="submit-btn" onclick="submitContent()">Analyze</button>
+    <div id="submit-error" class="alert alert-error" style="display:none"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-card" class="result-card">
+    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
+      <span id="result-badge" class="badge"></span>
+      <span id="ensemble-tag" class="ensemble-tag"></span>
+      <span id="cert-badge-inline" style="display:none" class="badge badge-verified">Verified Human</span>
+    </div>
+
+    <div class="content-id-row">
+      Content ID: <span id="result-id" class="content-id-val" title="Click to copy" onclick="copyId(this)"></span>
+      <span id="copy-hint" style="margin-left:0.3rem;font-size:0.72rem;color:#060"></span>
+    </div>
+
+    <div class="bar-row">
+      <span class="bar-label">Overall Confidence</span>
+      <div class="bar-track"><div class="bar-fill" id="conf-bar" style="width:0%"></div></div>
+      <span class="bar-value" id="conf-val"></span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">Signal 1 — LLM</span>
+      <div class="bar-track"><div class="bar-fill" id="llm-bar" style="width:0%"></div></div>
+      <span class="bar-value" id="llm-val"></span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">Signal 2 — Stylometric</span>
+      <div class="bar-track"><div class="bar-fill" id="stylo-bar" style="width:0%"></div></div>
+      <span class="bar-value" id="stylo-val"></span>
+    </div>
+    <div id="ling-row" class="bar-row">
+      <span class="bar-label">Signal 3 — Linguistic</span>
+      <div class="bar-track"><div class="bar-fill" id="ling-bar" style="width:0%"></div></div>
+      <span class="bar-value" id="ling-val"></span>
+    </div>
+
+    <div class="label-text" id="result-label"></div>
+
+    <div class="result-actions">
+      <button class="ghost" onclick="goToTab('appeal', prefillAppeal)">→ Dispute this classification</button>
+      <button class="ghost" id="cert-action-btn" onclick="goToTab('certify', prefillCertify)" style="display:none">→ Request provenance certificate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Appeal ─────────────────────────────────────────────────────────────── -->
+<div id="tab-appeal" class="tab">
+  <div class="section">
+    <h2>Submit Appeal</h2>
+    <div class="field">
+      <label for="appeal-id">Content ID</label>
+      <input type="text" id="appeal-id" placeholder="Paste content_id from your submission">
+    </div>
+    <div class="field">
+      <label for="appeal-reason">Your Reasoning</label>
+      <textarea id="appeal-reason" placeholder="Explain why this classification is incorrect. Include context about how you created this content." style="min-height:120px"></textarea>
+    </div>
+    <button class="primary" id="appeal-btn" onclick="submitAppeal()">Submit Appeal</button>
+    <div id="appeal-error"   class="alert alert-error"   style="display:none"></div>
+    <div id="appeal-success" class="alert alert-success" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ── Certificate ────────────────────────────────────────────────────────── -->
+<div id="tab-certify" class="tab">
+  <div class="section">
+    <h2>Request Provenance Certificate</h2>
+    <p style="font-size:0.82rem;color:#555;margin-bottom:1rem;line-height:1.6">
+      A Provenance Certificate is issued to creators whose content was classified as
+      <strong>human-written or uncertain</strong> and who can describe their creative process.
+      The certificate displays a "Verified Human" badge on the content.
+    </p>
+    <div class="field">
+      <label for="cert-content-id">Content ID</label>
+      <input type="text" id="cert-content-id" placeholder="Paste content_id from your submission">
+    </div>
+    <div class="field">
+      <label for="cert-description">Describe Your Creative Process</label>
+      <textarea id="cert-description" placeholder="Describe how you wrote or created this work — your inspiration, process, tools you used, time spent, etc. Minimum 50 characters." style="min-height:130px"></textarea>
+    </div>
+    <button class="primary" id="cert-btn" onclick="submitCertificate()">Request Certificate</button>
+    <div id="cert-error"   class="alert alert-error"   style="display:none"></div>
+    <div id="cert-success" class="alert alert-success" style="display:none"></div>
+    <div id="cert-issued" style="display:none;margin-top:1rem">
+      <div class="cert-badge-issued">Verified Human — Provenance Certificate Issued</div>
+      <div style="font-size:0.75rem;color:#555;margin-top:0.5rem">Certificate ID: <span id="cert-id-display" style="font-family:monospace"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Analytics ─────────────────────────────────────────────────────────── -->
+<div id="tab-analytics" class="tab">
+  <div class="section">
+    <h2>Platform Analytics</h2>
+    <button class="secondary" onclick="loadAnalytics()" style="margin-bottom:1rem">↻ Refresh</button>
+    <div id="analytics-body"><span class="empty-state">Loading…</span></div>
+  </div>
+</div>
+
+<!-- ── Audit Log ─────────────────────────────────────────────────────────── -->
+<div id="tab-log" class="tab">
+  <div class="section">
+    <h2>Audit Log</h2>
+    <button class="secondary" onclick="loadLog()" style="margin-bottom:1rem">↻ Refresh</button>
+    <div id="log-body"><span class="empty-state">Loading…</span></div>
+  </div>
+</div>
+
+<script>
+// ── Tab nav ──────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'log')       loadLog();
+  if (name === 'analytics') loadAnalytics();
+}
+function goToTab(name, cb) {
+  const btn = [...document.querySelectorAll('.nav button')].find(b => b.textContent.trim().toLowerCase() === name);
+  switchTab(name, btn);
+  if (cb) cb();
+}
+
+// ── Content type toggle ──────────────────────────────────────────────────────
+function onContentTypeChange() {
+  const type = document.getElementById('content-type').value;
+  document.getElementById('text-fields').style.display     = type === 'text' ? '' : 'none';
+  document.getElementById('metadata-fields').classList.toggle('visible', type === 'metadata');
+}
+
+// ── Submit ───────────────────────────────────────────────────────────────────
+async function submitContent() {
+  const creatorId   = document.getElementById('creator-id').value.trim();
+  const contentType = document.getElementById('content-type').value;
+  const errEl = document.getElementById('submit-error');
+  const btn   = document.getElementById('submit-btn');
+  errEl.style.display = 'none';
+
+  if (!creatorId) return showErr(errEl, 'Creator ID is required.');
+
+  let body = { creator_id: creatorId, content_type: contentType };
+
+  if (contentType === 'text') {
+    const text = document.getElementById('text-input').value.trim();
+    if (!text)           return showErr(errEl, 'Content text is required.');
+    if (text.length < 20) return showErr(errEl, 'Text must be at least 20 characters.');
+    body.text = text;
+  } else {
+    const title       = document.getElementById('meta-title').value.trim();
+    const description = document.getElementById('meta-description').value.trim();
+    const tagsRaw     = document.getElementById('meta-tags').value.trim();
+    const genre       = document.getElementById('meta-genre').value.trim();
+    if (!title && !description) return showErr(errEl, 'At least a title or description is required for metadata.');
+    body.metadata = {
+      title, description, genre,
+      tags: tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : []
+    };
+  }
+
+  btn.disabled = true; btn.textContent = 'Analyzing…';
+  try {
+    const res  = await fetch('/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) {
+      showErr(errEl, res.status === 429 ? 'Rate limit exceeded — please wait before submitting again.' : (data.error || 'Submission failed.'));
+      return;
+    }
+    renderResult(data);
+  } catch { showErr(errEl, 'Network error. Is the server running?'); }
+  finally { btn.disabled = false; btn.textContent = 'Analyze'; }
+}
+
+function renderResult(d) {
+  const attrMap = {
+    likely_ai:    ['AI-Generated',  'badge-ai'],
+    likely_human: ['Human-Written', 'badge-human'],
+    uncertain:    ['Uncertain',     'badge-uncertain'],
+  };
+  const [label, cls] = attrMap[d.attribution] || ['Unknown', 'badge-uncertain'];
+  const badge = document.getElementById('result-badge');
+  badge.textContent = label; badge.className = 'badge ' + cls;
+
+  const ensTag = document.getElementById('ensemble-tag');
+  ensTag.textContent = d.ensemble_method ? d.ensemble_method.replace('_', ' ') : '';
+
+  const idEl = document.getElementById('result-id');
+  idEl.textContent = d.content_id; idEl.dataset.id = d.content_id;
+  idEl.dataset.attribution = d.attribution;
+  document.getElementById('copy-hint').textContent = '';
+
+  setBar('conf-bar',  'conf-val',  d.confidence);
+  setBar('llm-bar',   'llm-val',   d.llm_score);
+  setBar('stylo-bar', 'stylo-val', d.stylometric_score);
+
+  const lingRow = document.getElementById('ling-row');
+  if (d.linguistic_score !== null && d.linguistic_score !== undefined) {
+    lingRow.style.display = '';
+    setBar('ling-bar', 'ling-val', d.linguistic_score);
+  } else {
+    lingRow.style.display = 'none';
+  }
+
+  document.getElementById('result-label').textContent = d.label;
+  document.getElementById('cert-badge-inline').style.display = 'none';
+
+  // Show cert button if not likely_ai
+  const certBtn = document.getElementById('cert-action-btn');
+  certBtn.style.display = (d.attribution !== 'likely_ai') ? '' : 'none';
+
+  document.getElementById('result-card').classList.add('visible');
+  document.getElementById('result-card').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function setBar(barId, valId, score) {
+  document.getElementById(barId).style.width = (score * 100).toFixed(1) + '%';
+  document.getElementById(valId).textContent  = (score * 100).toFixed(1) + '%';
+}
+
+function copyId(el) {
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    document.getElementById('copy-hint').textContent = 'copied!';
+    setTimeout(() => document.getElementById('copy-hint').textContent = '', 2000);
+  });
+}
+
+// ── Appeal ───────────────────────────────────────────────────────────────────
+function prefillAppeal() {
+  const id = document.getElementById('result-id').dataset.id;
+  if (id) document.getElementById('appeal-id').value = id;
+}
+
+async function submitAppeal() {
+  const contentId = document.getElementById('appeal-id').value.trim();
+  const reasoning = document.getElementById('appeal-reason').value.trim();
+  const errEl  = document.getElementById('appeal-error');
+  const succEl = document.getElementById('appeal-success');
+  const btn    = document.getElementById('appeal-btn');
+  errEl.style.display = 'none'; succEl.style.display = 'none';
+
+  if (!contentId || !reasoning) return showErr(errEl, 'Both fields are required.');
+
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    const res  = await fetch('/appeal', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content_id:contentId, creator_reasoning:reasoning}) });
+    const data = await res.json();
+    if (!res.ok) { showErr(errEl, data.error || 'Appeal failed.'); return; }
+    succEl.textContent = data.message + ' Status: ' + data.status;
+    succEl.style.display = 'block';
+    document.getElementById('appeal-reason').value = '';
+  } catch { showErr(errEl, 'Network error.'); }
+  finally { btn.disabled = false; btn.textContent = 'Submit Appeal'; }
+}
+
+// ── Certificate ──────────────────────────────────────────────────────────────
+function prefillCertify() {
+  const id = document.getElementById('result-id').dataset.id;
+  if (id) document.getElementById('cert-content-id').value = id;
+}
+
+async function submitCertificate() {
+  const contentId   = document.getElementById('cert-content-id').value.trim();
+  const description = document.getElementById('cert-description').value.trim();
+  const errEl   = document.getElementById('cert-error');
+  const succEl  = document.getElementById('cert-success');
+  const issuedEl = document.getElementById('cert-issued');
+  const btn     = document.getElementById('cert-btn');
+  errEl.style.display = 'none'; succEl.style.display = 'none'; issuedEl.style.display = 'none';
+
+  if (!contentId || !description) return showErr(errEl, 'Both fields are required.');
+  if (description.length < 50)    return showErr(errEl, 'Process description must be at least 50 characters.');
+
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try {
+    const res  = await fetch('/certify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content_id:contentId, process_description:description}) });
+    const data = await res.json();
+    if (!res.ok) { showErr(errEl, data.error || 'Certificate request failed.'); return; }
+    document.getElementById('cert-id-display').textContent = data.certificate_id;
+    issuedEl.style.display = 'block';
+    // Update badge in result card if visible
+    document.getElementById('cert-badge-inline').style.display = '';
+    document.getElementById('cert-action-btn').style.display = 'none';
+  } catch { showErr(errEl, 'Network error.'); }
+  finally { btn.disabled = false; btn.textContent = 'Request Certificate'; }
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  const body = document.getElementById('analytics-body');
+  body.innerHTML = '<span class="empty-state">Loading…</span>';
+  try {
+    const res  = await fetch('/analytics');
+    const d    = await res.json();
+    const total = d.total_submissions || 0;
+
+    const aiPct   = total ? (d.verdict_distribution.likely_ai    / total * 100) : 0;
+    const uncPct  = total ? (d.verdict_distribution.uncertain     / total * 100) : 0;
+    const humPct  = total ? (d.verdict_distribution.likely_human  / total * 100) : 0;
+
+    body.innerHTML = `
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-label">Total Submissions</div>
+          <div class="metric-value">${total}</div>
+          <div class="metric-sub">text: ${d.content_type_breakdown.text} · metadata: ${d.content_type_breakdown.metadata}</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Appeal Rate</div>
+          <div class="metric-value">${d.appeal_rate_pct}%</div>
+          <div class="metric-sub">${d.appeal_count} appeal${d.appeal_count !== 1 ? 's' : ''} filed</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Avg Confidence</div>
+          <div class="metric-value">${(d.avg_confidence * 100).toFixed(1)}%</div>
+          <div class="metric-sub">${d.certificate_count} certificate${d.certificate_count !== 1 ? 's' : ''} issued</div>
+        </div>
+      </div>
+      <div class="section" style="border:1px solid #000;padding:1.25rem">
+        <h2>Verdict Distribution</h2>
+        ${distBar('AI-Generated',   d.verdict_distribution.likely_ai,    aiPct)}
+        ${distBar('Uncertain',      d.verdict_distribution.uncertain,     uncPct)}
+        ${distBar('Human-Written',  d.verdict_distribution.likely_human,  humPct)}
+      </div>`;
+  } catch { body.innerHTML = '<span class="alert alert-error">Failed to load analytics.</span>'; }
+}
+
+function distBar(label, count, pct) {
+  return `<div class="dist-bar-row">
+    <span class="dist-label">${label}</span>
+    <div class="dist-track"><div class="dist-fill" style="width:${pct.toFixed(1)}%"></div></div>
+    <span class="dist-value">${count} (${pct.toFixed(1)}%)</span>
+  </div>`;
+}
+
+// ── Audit Log ────────────────────────────────────────────────────────────────
+async function loadLog() {
+  const body = document.getElementById('log-body');
+  body.innerHTML = '<span class="empty-state">Loading…</span>';
+  try {
+    const res  = await fetch('/log?limit=30');
+    const data = await res.json();
+    if (!data.entries?.length) { body.innerHTML = '<span class="empty-state">No entries yet.</span>'; return; }
+
+    const attrTag = {
+      likely_ai:    '<span class="tag tag-ai">AI</span>',
+      likely_human: '<span class="tag tag-human">Human</span>',
+      uncertain:    '<span class="tag tag-uncertain">Uncertain</span>',
+    };
+
+    let html = `<div class="log-wrap"><table class="log-table"><thead><tr>
+      <th>Timestamp</th><th style="min-width:10rem">Content ID</th><th>Type</th><th>Creator</th>
+      <th>Content</th><th>Attribution</th><th>Conf.</th><th>LLM</th><th>Stylo</th><th>Ling.</th><th>Ensemble</th><th style="min-width:7rem">Status</th>
+    </tr></thead><tbody>`;
+
+    for (const e of data.entries) {
+      const ts      = new Date(e.timestamp).toLocaleString(undefined, {dateStyle:'short',timeStyle:'short'});
+      const shortId = e.content_id;
+      const tag     = attrTag[e.attribution] || e.attribution;
+      const lingVal = e.linguistic_score !== null && e.linguistic_score !== undefined
+        ? (e.linguistic_score * 100).toFixed(1) + '%' : '—';
+
+      let statusCell = e.status === 'under_review'
+        ? '<span class="tag tag-review">Appeal</span>'
+        : '<span style="color:#aaa">—</span>';
+      if (e.certificate_id) statusCell += ' <span class="tag tag-verified">Cert.</span>';
+
+      const appealNote = e.appeal_reasoning
+        ? `<br><span style="font-size:0.68rem;color:#666">"${e.appeal_reasoning.slice(0,60)}…"</span>` : '';
+
+      const uid = 'ct-' + e.content_id.slice(0,8);
+      let contentPreview = '—';
+      if (e.content_text) {
+        const snippet = e.content_text.slice(0, 60).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const full    = e.content_text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const hasMore = e.content_text.length > 60;
+        contentPreview = `<span id="${uid}-short">${snippet}${hasMore ? '…' : ''}</span>`
+          + (hasMore
+            ? `<span id="${uid}-full" style="display:none">${full}</span>
+               <br><button class="ghost" style="font-size:0.68rem" onclick="toggleContent('${uid}')">show more</button>`
+            : '');
+      }
+
+      html += `<tr>
+        <td>${ts}</td>
+        <td style="font-family:monospace;font-size:0.7rem;word-break:break-all">${shortId}</td>
+        <td>${e.content_type || 'text'}</td>
+        <td>${e.creator_id}</td>
+        <td style="max-width:180px;font-size:0.75rem;word-break:break-word">${contentPreview}</td>
+        <td>${tag}</td>
+        <td>${(e.confidence * 100).toFixed(1)}%</td>
+        <td>${(e.llm_score * 100).toFixed(1)}%</td>
+        <td>${(e.stylometric_score * 100).toFixed(1)}%</td>
+        <td>${lingVal}</td>
+        <td style="font-size:0.7rem;color:#666">${e.ensemble_method || '—'}</td>
+        <td>${statusCell}${appealNote}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div><div class="log-count">${data.count} entries shown.</div>`;
+    body.innerHTML = html;
+  } catch { body.innerHTML = '<span class="alert alert-error">Failed to load log.</span>'; }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+
+function toggleContent(uid) {
+  const s = document.getElementById(uid + '-short');
+  const f = document.getElementById(uid + '-full');
+  const btn = s.nextElementSibling?.nextElementSibling;
+  const expanded = f.style.display !== 'none';
+  s.style.display = expanded ? '' : 'none';
+  f.style.display = expanded ? 'none' : '';
+  if (btn) btn.textContent = expanded ? 'show more' : 'show less';
+}
+</script>
+
+</body>
+</html>
